@@ -1,0 +1,11 @@
+.claude/
+.playwright-mcp/
+.git/
+__pycache__/
+*.pyc
+data/tax-cache.sqlite
+data/tax-cache.sqlite-wal
+data/tax-cache.sqlite-shm
+data/build-cache.sqlite*
+scripts/
+ESTV_API.md

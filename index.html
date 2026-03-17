@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swiss Tax Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Swiss Tax Map</h1>
+    <span class="subtitle">Income &amp; wealth tax across all municipalities</span>
+  </header>
+
+  <div class="layout">
+    <!-- Left panel: form + detail + comparison -->
+    <aside class="panel">
+      <form id="tax-form" novalidate>
+        <div class="form-group">
+          <label for="tax-year">Tax year</label>
+          <select id="tax-year">
+            <option value="2025" selected>2025</option>
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="income">Income (CHF)</label>
+          <input type="number" id="income" value="100000" min="0" step="1000">
+        </div>
+
+        <div class="form-group">
+          <label for="income-type">Income type</label>
+          <select id="income-type">
+            <option value="1" selected>Gross income</option>
+            <option value="2">Net income</option>
+            <option value="0">Taxable income</option>
+            <option value="3">Pension income</option>
+            <option value="4">Other income</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="age">Age</label>
+          <input type="number" id="age" value="35" min="18" max="120">
+        </div>
+
+        <div class="form-group">
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="1" selected>Single</option>
+            <option value="2">Married</option>
+            <option value="3">Civil partnership</option>
+          </select>
+        </div>
+
+        <div class="form-group partner-fields" style="display: none;">
+          <label for="income2">Partner income (CHF)</label>
+          <input type="number" id="income2" value="0" min="0" step="1000">
+        </div>
+
+        <div class="form-group partner-fields" style="display: none;">
+          <label for="age2">Partner age</label>
+          <input type="number" id="age2" value="35" min="18" max="120">
+        </div>
+
+        <div class="form-group">
+          <label for="religion">Religion</label>
+          <select id="religion">
+            <option value="5" selected>Other / None</option>
+            <option value="1">Roman Catholic</option>
+            <option value="2">Protestant</option>
+            <option value="3">Christian Catholic</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="children">Children (ages, comma-separated)</label>
+          <input type="text" id="children" placeholder="e.g. 5, 12">
+        </div>
+
+        <div class="form-group">
+          <label for="wealth">Wealth (CHF)</label>
+          <input type="number" id="wealth" value="50000" min="0" step="10000">
+        </div>
+
+        <div class="form-group">
+          <label class="toggle-label">
+            <input type="checkbox" id="detailed-toggle">
+            Detailed calculation (custom deductions)
+          </label>
+        </div>
+
+        <div id="deductions-panel" style="display: none;">
+          <div id="deductions-loading" style="display:none; font-size:12px; color:#888;">Loading deductions...</div>
+          <div id="deductions-fields"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Cantons to calculate</label>
+          <div class="checkbox-dropdown" id="canton-dropdown">
+            <div class="checkbox-dropdown-toggle" id="canton-dropdown-toggle">All cantons</div>
+            <div class="checkbox-dropdown-menu" id="canton-dropdown-menu">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" id="calculate-btn">Calculate All</button>
+      </form>
+
+      <div id="progress-container" style="display: none;">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <span id="progress-text">0 / 0</span>
+        <button id="cancel-btn" type="button">Cancel</button>
+      </div>
+
+      <div id="detail-panel" style="display: none;">
+        <h3>Detail</h3>
+        <div id="detail-content"></div>
+        <button id="compare-btn" type="button">+ Compare</button>
+      </div>
+
+      <div id="comparison-panel" style="display: none;">
+        <h3>Comparison</h3>
+        <div id="comparison-content"></div>
+        <button id="clear-comparison-btn" type="button">Clear</button>
+      </div>
+    </aside>
+
+    <!-- Main area: map + ranking -->
+    <main class="main-area">
+      <div id="map"></div>
+      <div id="legend"></div>
+      <div id="ranking-container">
+        <h3>Ranking <span id="ranking-count"></span></h3>
+        <div class="ranking-controls">
+          <select id="canton-filter">
+            <option value="">All cantons</option>
+          </select>
+          <input type="text" id="ranking-search" placeholder="Search municipality...">
+        </div>
+        <div class="ranking-table-wrapper">
+          <table id="ranking-table">
+            <thead>
+              <tr>
+                <th data-sort="rank">#</th>
+                <th data-sort="name">Municipality</th>
+                <th data-sort="canton">Canton</th>
+                <th data-sort="total" class="sorted-asc">Total</th>
+                <th data-sort="income">Income</th>
+                <th data-sort="wealth">Wealth</th>
+                <th data-sort="rate">Rate</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cache.js"></script>
+  <script src="js/calculator.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
