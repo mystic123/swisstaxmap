@@ -215,22 +215,23 @@ header .subtitle {
 /* Custom tooltip via CSS since title= is ugly */
 .info-icon:hover::after {
   content: attr(data-tip);
-  position: absolute;
-  left: 20px;
-  top: -4px;
+  position: fixed;
   z-index: 2000;
   background: rgba(30, 30, 50, 0.95);
   color: #fff;
-  padding: 8px 10px;
-  border-radius: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
   font-size: 12px;
   font-style: normal;
   font-weight: 400;
-  line-height: 1.4;
-  width: 240px;
+  line-height: 1.45;
+  width: 280px;
+  max-width: 40vw;
   white-space: normal;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   pointer-events: none;
+  left: 310px;
+  top: auto;
 }
 
 /* Checkbox dropdown */

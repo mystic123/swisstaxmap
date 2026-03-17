@@ -60,7 +60,7 @@
   });
 
   // --- Detailed calculation toggle ---
-  let budgetItems = null; // cached budget items from API
+  let budgetItems = null;
   const detailedToggle = document.getElementById("detailed-toggle");
   detailedToggle.addEventListener("change", async () => {
     const panel = document.getElementById("deductions-panel");
@@ -71,7 +71,15 @@
       panel.style.display = "none";
       budgetItems = null;
     }
+    try { localStorage.setItem("tax_detailed_on", detailedToggle.checked ? "1" : ""); } catch {}
   });
+
+  // Restore detailed toggle state
+  if (localStorage.getItem("tax_detailed_on") === "1") {
+    detailedToggle.checked = true;
+    document.getElementById("deductions-panel").style.display = "block";
+    loadBudgetItems();
+  }
 
   // --- Functions ---
 
@@ -90,6 +98,7 @@
     const formData = Calculator.getFormData();
     formData.budget = getBudgetFromForm();
     Cache.saveFormState(formData);
+    if (detailedToggle.checked) saveBudgetValues();
 
     const btn = document.getElementById("calculate-btn");
     const progressContainer = document.getElementById("progress-container");
@@ -228,7 +237,7 @@
     UEBRIGESEK: "Other taxable income not entered elsewhere (e.g. alimony received, lottery winnings).",
     VMERTRAEGE: "Investment income: savings interest, dividends, bond coupons. Only realized gains, not unrealized.",
     BETEILIGUNG: "Subset of investment income from qualified participations (≥10% ownership or market value ≥CHF 1M). Subject to partial taxation (50-70% depending on canton).",
-    KKPRAEMIEN: "Health & accident insurance premiums plus interest on savings capital. Default assumes CHF 380/month per adult + CHF 100/month per child under 18. Enter your actual annual total.",
+    KKPRAEMIEN: "Total annual insurance premiums for ALL family members: basic health (KVG), supplementary/private (VVG), accident, life insurance, plus interest on savings capital. The cantonal deduction cap is applied automatically. Default assumes CHF 380/month per adult + CHF 100/month per child under 18.",
     IPVEXTRA: "Individual premium reduction (IPV/IPE) — government subsidy for health insurance. Enter the amount if you receive it; reduces the insurance deduction.",
     PRAEMIEN3A: "Total pillar 3a contributions by BOTH taxpayers combined. 2025 max: CHF 7'056 per employed person (CHF 14'112 for a couple both employed). Deducted from taxable income.",
     VERPFLEGUNG_P1: "Meal costs at workplace (no subsidized canteen). Typically CHF 15/day for days physically in office. Only for employed income types.",
@@ -251,6 +260,7 @@
     const fieldsContainer = document.getElementById("deductions-fields");
     loading.style.display = "block";
     fieldsContainer.innerHTML = "";
+    const savedBudget = loadSavedBudget();
 
     try {
       // Use Zürich as reference municipality for default deduction values
@@ -297,10 +307,18 @@
 
           const input = document.createElement("input");
           input.type = "number";
-          input.value = item.Value;
           input.dataset.ident = item.Ident;
           input.readOnly = !item.Show;
           if (!item.Show) input.tabIndex = -1;
+
+          // Restore saved value or use API default
+          const saved = savedBudget[item.Ident];
+          input.value = saved != null ? saved : item.Value;
+
+          // Auto-save on change
+          if (item.Show) {
+            input.addEventListener("change", saveBudgetValues);
+          }
 
           row.append(label, input);
           groupDiv.appendChild(row);
@@ -312,6 +330,24 @@
       fieldsContainer.innerHTML = `<div style="color:#d63031;font-size:12px">Failed to load deductions: ${err.message}</div>`;
     }
     loading.style.display = "none";
+  }
+
+  function saveBudgetValues() {
+    const inputs = document.querySelectorAll("#deductions-fields input[data-ident]");
+    const values = {};
+    inputs.forEach((input) => {
+      if (!input.readOnly) {
+        values[input.dataset.ident] = parseInt(input.value, 10) || 0;
+      }
+    });
+    try { localStorage.setItem("tax_budget_values", JSON.stringify(values)); } catch {}
+  }
+
+  function loadSavedBudget() {
+    try {
+      const raw = localStorage.getItem("tax_budget_values");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
   }
 
   function getBudgetFromForm() {
