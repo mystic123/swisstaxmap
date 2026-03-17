@@ -42,6 +42,7 @@ const Cache = (() => {
         fm: result.FortuneTaxCity,
         fch: result.FortuneTaxChurch,
         mr: result.MarginalTaxRate,
+        mv: result.MarginalTaxRateVM,
         ti: result.TaxableIncomeCanton,
         tf: result.TaxableFortuneCanton,
       };
@@ -113,6 +114,7 @@ const Cache = (() => {
       FortuneTaxCity: compact.fm,
       FortuneTaxChurch: compact.fch,
       MarginalTaxRate: compact.mr,
+      MarginalTaxRateVM: compact.mv,
       TaxableIncomeCanton: compact.ti,
       TaxableFortuneCanton: compact.tf,
     };

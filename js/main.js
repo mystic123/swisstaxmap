@@ -59,6 +59,13 @@
     Calculator.cancel();
   });
 
+  // --- Map color mode ---
+  document.querySelectorAll('input[name="color-mode"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      TaxMap.setColorMode(e.target.value);
+    });
+  });
+
   // --- Detailed calculation toggle ---
   let budgetItems = null;
   const detailedToggle = document.getElementById("detailed-toggle");

@@ -59,6 +59,41 @@ header .subtitle {
   background: #f8f9fa;
 }
 
+/* Map controls */
+#map-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 16px;
+  background: #fff;
+  border-top: 1px solid #eee;
+  font-size: 12px;
+}
+
+#map-controls > label:first-child {
+  font-weight: 600;
+  color: #555;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  color: #555;
+}
+
+.radio-label input[type="radio"] {
+  accent-color: #1a73e8;
+  margin: 0;
+}
+
+.legend-label {
+  font-size: 11px;
+  color: #888;
+  font-style: italic;
+}
+
 /* Legend */
 #legend {
   display: none;

@@ -135,6 +135,12 @@
     <!-- Main area: map + ranking -->
     <main class="main-area">
       <div id="map"></div>
+      <div id="map-controls">
+        <label>Color by:</label>
+        <label class="radio-label"><input type="radio" name="color-mode" value="total" checked> Total</label>
+        <label class="radio-label"><input type="radio" name="color-mode" value="income"> Income</label>
+        <label class="radio-label"><input type="radio" name="color-mode" value="wealth"> Wealth</label>
+      </div>
       <div id="legend"></div>
       <div id="ranking-container">
         <h3>Ranking <span id="ranking-count"></span></h3>
@@ -150,11 +156,14 @@
               <tr>
                 <th data-sort="rank">#</th>
                 <th data-sort="name">Municipality</th>
-                <th data-sort="canton">Canton</th>
+                <th data-sort="canton">Ct.</th>
                 <th data-sort="total" class="sorted-asc">Total</th>
-                <th data-sort="income">Income</th>
-                <th data-sort="wealth">Wealth</th>
-                <th data-sort="rate">Rate</th>
+                <th data-sort="income">Income Tax</th>
+                <th data-sort="wealth">Wealth Tax</th>
+                <th data-sort="effRate">Eff. %</th>
+                <th data-sort="effIncome">Inc. %</th>
+                <th data-sort="effWealth">Wlt. %</th>
+                <th data-sort="marginal">Marg.</th>
               </tr>
             </thead>
             <tbody id="ranking-body"></tbody>

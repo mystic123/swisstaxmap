@@ -58,10 +58,12 @@ const UI = (() => {
         ${wealthTax > 0 ? `
           <div class="detail-row" style="margin-top:4px"><span>Canton wealth</span><span>${fmt(result.FortuneTaxCanton)}</span></div>
           <div class="detail-row"><span>Municipal wealth</span><span>${fmt(result.FortuneTaxCity)}</span></div>
+          ${result.FortuneTaxChurch ? `<div class="detail-row"><span>Church wealth</span><span>${fmt(result.FortuneTaxChurch)}</span></div>` : ""}
         ` : ""}
         <div class="detail-row" style="margin-top:4px">
-          <span>Marginal rate</span><span>${fmtPct(result.MarginalTaxRate)}</span>
+          <span>Marginal income</span><span>${fmtPct(result.MarginalTaxRate)}</span>
         </div>
+        ${result.MarginalTaxRateVM ? `<div class="detail-row"><span>Marginal wealth</span><span>${fmtPct(result.MarginalTaxRateVM)}</span></div>` : ""}
         <div class="detail-row">
           <span>Effective rate</span><span>${fmtPct(result.TotalTax / ((parseInt(document.getElementById("income").value) || 0) + (parseInt(document.getElementById("income2").value) || 0) || 1) * 100)}</span>
         </div>
@@ -132,6 +134,13 @@ const UI = (() => {
     const countEl = document.getElementById("ranking-count");
 
     // Build sortable list
+    const totalInc = (parseInt(document.getElementById("income").value) || 0) +
+                     (parseInt(document.getElementById("income2").value) || 0) || 1;
+    // Use NETTO_VM from budget panel if detailed mode is on, else the form wealth field
+    const budgetVmInput = document.querySelector('#deductions-fields input[data-ident="NETTO_VM"]');
+    const totalWlt = (budgetVmInput ? parseInt(budgetVmInput.value) : null) ||
+                     parseInt(document.getElementById("wealth").value) || 1;
+
     let rows = [];
     for (const bfs in allResults) {
       const r = allResults[bfs];
@@ -148,7 +157,10 @@ const UI = (() => {
         total: r.TotalTax,
         income: incomeTax,
         wealth: wealthTax,
-        rate: r.MarginalTaxRate || 0,
+        effRate: r.TotalTax / totalInc * 100,
+        effIncome: incomeTax / totalInc * 100,
+        effWealth: totalWlt > 0 ? wealthTax / totalWlt * 100 : 0,
+        marginal: r.MarginalTaxRate || 0,
       });
     }
 
@@ -178,7 +190,6 @@ const UI = (() => {
 
     // Render (cap at 500 for performance)
     const display = rows.slice(0, 500);
-    const totalIncome = (parseInt(document.getElementById("income").value) || 0) + (parseInt(document.getElementById("income2").value) || 0) || 1;
 
     body.innerHTML = display
       .map(
@@ -189,7 +200,10 @@ const UI = (() => {
         <td>CHF ${fmt(r.total)}</td>
         <td>${fmt(r.income)}</td>
         <td>${fmt(r.wealth)}</td>
-        <td>${(r.total / totalIncome * 100).toFixed(1)}%</td>
+        <td>${r.effRate.toFixed(1)}%</td>
+        <td>${r.effIncome.toFixed(1)}%</td>
+        <td>${r.effWealth.toFixed(2)}%</td>
+        <td>${r.marginal.toFixed(1)}%</td>
       </tr>`
       )
       .join("");
