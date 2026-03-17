@@ -7,14 +7,18 @@ const TaxMap = (() => {
   let municipalityLayer;
   let cantonLayer;
   let lakesLayer;
-  let municipalities = {}; // BFS → Leaflet layer
-  let muniData = {}; // BFS → {name, canton, ...}
-  let results = {}; // BFS → tax result
+  let municipalities = {};
+  let muniData = {};
+  let results = {};
   let selectedBfs = null;
   let taxMin = Infinity;
   let taxMax = -Infinity;
-  let colorMode = "total"; // "total" | "income" | "wealth"
+  let colorMode = "total";
   let onSelectCallback = null;
+
+  // Batched style updates via requestAnimationFrame
+  let pendingUpdates = new Set();
+  let rafScheduled = false;
 
   function lerp(a, b, t) {
     return Math.round(a + (b - a) * t);
@@ -32,18 +36,9 @@ const TaxMap = (() => {
 
   function getMetric(r) {
     if (!r) return null;
-    if (colorMode === "income") {
-      return (r.IncomeTaxCanton || 0) + (r.IncomeTaxCity || 0) +
-             (r.IncomeTaxFed || 0) + (r.IncomeTaxChurch || 0) + (r.PersonalTax || 0);
-    }
-    if (colorMode === "wealth") {
-      return (r.FortuneTaxCanton || 0) + (r.FortuneTaxCity || 0) + (r.FortuneTaxChurch || 0);
-    }
+    if (colorMode === "income") return TaxUtils.sumIncomeTax(r);
+    if (colorMode === "wealth") return TaxUtils.sumWealthTax(r);
     return r.TotalTax;
-  }
-
-  function fmtCHF(n) {
-    return n != null ? `CHF ${Math.round(n).toLocaleString("de-CH")}` : "-";
   }
 
   function init(topoData, muniDataIn, onSelect) {
@@ -72,16 +67,15 @@ const TaxMap = (() => {
 
         layer.on("mouseover", function (e) {
           const info = muniData[bfs];
-          const name = info ? info.name : `BFS ${bfs}`;
-          const canton = info ? info.canton : "?";
+          const name = info ? TaxUtils.esc(info.name) : `BFS ${bfs}`;
+          const canton = info ? TaxUtils.esc(info.canton) : "?";
           const r = results[bfs];
           let html = `<span class="tt-name">${name}</span> ${canton}`;
           if (r && r.TotalTax != null) {
-            const inc = (r.IncomeTaxCanton || 0) + (r.IncomeTaxCity || 0) +
-                        (r.IncomeTaxFed || 0) + (r.IncomeTaxChurch || 0) + (r.PersonalTax || 0);
-            const wlt = (r.FortuneTaxCanton || 0) + (r.FortuneTaxCity || 0) + (r.FortuneTaxChurch || 0);
-            html += `<br><span class="tt-tax">Total: ${fmtCHF(r.TotalTax)}</span>`;
-            html += `<br>Income: ${fmtCHF(inc)} · Wealth: ${fmtCHF(wlt)}`;
+            const inc = TaxUtils.sumIncomeTax(r);
+            const wlt = TaxUtils.sumWealthTax(r);
+            html += `<br><span class="tt-tax">Total: ${TaxUtils.fmtCHF(r.TotalTax)}</span>`;
+            html += `<br>Income: ${TaxUtils.fmtCHF(inc)} · Wealth: ${TaxUtils.fmtCHF(wlt)}`;
             html += `<br>Marginal: ${(r.MarginalTaxRate || 0).toFixed(1)}%`;
             if (r.MarginalTaxRateVM) html += ` · Wealth: ${r.MarginalTaxRateVM.toFixed(2)}%`;
           } else {
@@ -145,6 +139,7 @@ const TaxMap = (() => {
     if (onSelectCallback) onSelectCallback(bfs, results[bfs]);
   }
 
+  /** Incrementally update — batches via rAF to avoid jank */
   function updateSingle(bfs, result) {
     results[bfs] = result;
     const m = getMetric(result);
@@ -152,7 +147,19 @@ const TaxMap = (() => {
       if (m < taxMin) taxMin = m;
       if (m > taxMax) taxMax = m;
     }
-    resetStyle(bfs);
+    pendingUpdates.add(bfs);
+    if (!rafScheduled) {
+      rafScheduled = true;
+      requestAnimationFrame(flushPendingUpdates);
+    }
+  }
+
+  function flushPendingUpdates() {
+    rafScheduled = false;
+    for (const bfs of pendingUpdates) {
+      resetStyle(bfs);
+    }
+    pendingUpdates.clear();
   }
 
   function recolorAll() {
@@ -187,8 +194,8 @@ const TaxMap = (() => {
     legend.classList.add("visible");
 
     const labels = { total: "Total Tax", income: "Income Tax", wealth: "Wealth Tax" };
-    const minFmt = `CHF ${Math.round(taxMin).toLocaleString("de-CH")}`;
-    const maxFmt = `CHF ${Math.round(taxMax).toLocaleString("de-CH")}`;
+    const minFmt = TaxUtils.fmtCHF(taxMin);
+    const maxFmt = TaxUtils.fmtCHF(taxMax);
 
     const stops = [];
     for (let i = 0; i <= 10; i++) {

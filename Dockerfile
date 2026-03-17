@@ -8,7 +8,10 @@ COPY js/ js/
 COPY data/ch-municipalities.topojson data/
 COPY data/municipalities.json data/
 
+RUN adduser --disabled-password --no-create-home appuser && \
+    chown -R appuser:appuser /app/data
+USER appuser
+
 EXPOSE 8000
 
-# SQLite cache persisted via volume mount at /app/data/
 CMD ["python3", "server.py", "--port", "8000"]

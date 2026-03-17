@@ -15,8 +15,10 @@
     topoData = await topoResp.json();
     muniData = await muniResp.json();
   } catch (err) {
-    document.getElementById("map").innerHTML =
-      `<div style="padding:40px;color:#d63031">Failed to load map data: ${err.message}</div>`;
+    const errDiv = document.createElement("div");
+    errDiv.style.cssText = "padding:40px;color:#d63031";
+    errDiv.textContent = `Failed to load map data: ${err.message}`;
+    document.getElementById("map").appendChild(errDiv);
     return;
   }
 
@@ -57,6 +59,14 @@
   // --- Cancel button ---
   document.getElementById("cancel-btn").addEventListener("click", () => {
     Calculator.cancel();
+  });
+
+  // --- Cache reset ---
+  document.getElementById("reset-cache-btn").addEventListener("click", async () => {
+    if (!confirm("Clear all cached results (browser + server)?")) return;
+    Cache.clearAll();
+    try { await fetch("/api/clear-cache", { method: "POST" }); } catch {}
+    location.reload();
   });
 
   // --- Map color mode ---
@@ -307,7 +317,7 @@
 
           const label = document.createElement("label");
           if (tooltip) {
-            label.innerHTML = `${labelText} <span class="info-icon" data-tip="${tooltip.replace(/"/g, '&quot;')}">i</span>`;
+            label.innerHTML = `${TaxUtils.esc(labelText)} <span class="info-icon" data-tip="${tooltip.replace(/"/g, '&quot;')}">i</span>`;
           } else {
             label.textContent = labelText;
           }
@@ -334,7 +344,10 @@
         fieldsContainer.appendChild(groupDiv);
       }
     } catch (err) {
-      fieldsContainer.innerHTML = `<div style="color:#d63031;font-size:12px">Failed to load deductions: ${err.message}</div>`;
+      const errDiv = document.createElement("div");
+      errDiv.style.cssText = "color:#d63031;font-size:12px";
+      errDiv.textContent = `Failed to load deductions: ${err.message}`;
+      fieldsContainer.appendChild(errDiv);
     }
     loading.style.display = "none";
   }

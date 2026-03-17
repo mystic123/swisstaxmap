@@ -27,14 +27,16 @@ PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 
 PROJECT_ROOT = Path(__file__).resolve().parent
 CACHE_DB_PATH = PROJECT_ROOT / "data" / "tax-cache.sqlite"
 ESTV_BASE = "https://swisstaxcalculator.estv.admin.ch/delegate/ost-integration/v1/lg-proxy/operation/c3b67379_ESTV/"
+MAX_PAYLOAD = 64 * 1024  # 64 KB max POST body
 
 ALLOWED_ENDPOINTS = {
     "API_searchLocation",
     "API_calculateDetailedTaxes",
     "API_calculateTaxBudget",
-    "API_getTaxVersion",
-    "API_getTaxYearRange",
 }
+
+# File extensions allowed to be served via GET
+BLOCKED_EXTENSIONS = {".sqlite", ".sqlite-wal", ".sqlite-shm", ".db", ".py", ".pyc"}
 
 
 def init_db():
@@ -46,11 +48,9 @@ def init_db():
             key TEXT PRIMARY KEY,
             endpoint TEXT NOT NULL,
             response TEXT NOT NULL,
-            created_at REAL NOT NULL,
-            hit_count INTEGER DEFAULT 0
+            created_at REAL NOT NULL
         )
     """)
-    db.execute("CREATE INDEX IF NOT EXISTS idx_cache_endpoint ON cache(endpoint)")
     db.commit()
     return db
 
@@ -66,19 +66,24 @@ def cache_key(endpoint, payload_bytes):
 def cache_get(key):
     with DB_LOCK:
         row = DB.execute("SELECT response FROM cache WHERE key = ?", (key,)).fetchone()
-        if row:
-            DB.execute("UPDATE cache SET hit_count = hit_count + 1 WHERE key = ?", (key,))
-            DB.commit()
         return row[0] if row else None
 
 
 def cache_put(key, endpoint, response_str):
     with DB_LOCK:
         DB.execute(
-            "INSERT OR REPLACE INTO cache (key, endpoint, response, created_at, hit_count) VALUES (?, ?, ?, ?, 0)",
+            "INSERT OR REPLACE INTO cache (key, endpoint, response, created_at) VALUES (?, ?, ?, ?)",
             (key, endpoint, response_str, time.time()),
         )
         DB.commit()
+
+
+def cache_clear():
+    with DB_LOCK:
+        count = DB.execute("SELECT COUNT(*) FROM cache").fetchone()[0]
+        DB.execute("DELETE FROM cache")
+        DB.commit()
+        return count
 
 
 class ThreadingHTTPServer(ThreadingMixIn, http.server.HTTPServer):
@@ -89,17 +94,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
 
+    def do_GET(self):
+        # Block sensitive files
+        path = self.path.split("?")[0]
+        for ext in BLOCKED_EXTENSIONS:
+            if path.endswith(ext):
+                self.send_error(403, "Forbidden")
+                return
+        super().do_GET()
+
     def do_POST(self):
         if not self.path.startswith("/api/"):
             self.send_error(404)
             return
 
         endpoint = self.path[5:]
-        if endpoint not in ALLOWED_ENDPOINTS:
-            self.send_error(400, f"Unknown endpoint: {endpoint}")
+
+        # Cache clear endpoint
+        if endpoint == "clear-cache":
+            count = cache_clear()
+            self._send_json(json.dumps({"cleared": count}))
             return
 
-        content_length = int(self.headers.get("Content-Length", 0))
+        if endpoint not in ALLOWED_ENDPOINTS:
+            self.send_error(400, "Unknown endpoint")
+            return
+
+        # Validate Content-Length
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_error(400, "Invalid Content-Length")
+            return
+
+        if content_length > MAX_PAYLOAD:
+            self.send_error(413, "Payload too large")
+            return
+
         payload_bytes = self.rfile.read(content_length)
 
         key = cache_key(endpoint, payload_bytes)
@@ -118,13 +149,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 response_bytes = resp.read()
-        except URLError as e:
-            self.send_error(502, f"ESTV API error: {e}")
+        except URLError:
+            self.send_error(502, "Upstream API unavailable")
             return
 
         response_str = response_bytes.decode("utf-8")
 
-        # Cache
         try:
             cache_put(key, endpoint, response_str)
         except sqlite3.Error as e:
@@ -149,7 +179,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, format, *args):
-        # Only log API calls, not static files
         msg = format % args
         if "/api/" in msg:
             sys.stderr.write(f"  {msg}\n")

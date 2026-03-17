@@ -1,6 +1,6 @@
 /**
  * Batch calculator with concurrency control and progress reporting.
- * Pushes the ESTV API with high concurrency (50 parallel requests).
+ * Fires up to 200 concurrent fetch() requests (browser caps at ~6 per origin for HTTP/1.1).
  */
 const Calculator = (() => {
   const CONCURRENCY = 200;

@@ -59,6 +59,27 @@ header .subtitle {
   background: #f8f9fa;
 }
 
+/* Panel footer */
+.panel-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  text-align: center;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #bbb;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.link-btn:hover {
+  color: #888;
+  text-decoration: underline;
+}
+
 /* Map controls */
 #map-controls {
   display: flex;
