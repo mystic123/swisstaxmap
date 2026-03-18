@@ -10,6 +10,7 @@ const TaxMap = (() => {
   let municipalities = {};
   let muniData = {};
   let climateData = {};
+  let travelData = {};
   let results = {};
   let selectedBfs = null;
   let dataMin = Infinity;
@@ -31,7 +32,14 @@ const TaxMap = (() => {
     precip:   { hMin: 210, hMax: 210, sMin: 10, sMax: 80, lMin: 97, lMax: 40 }, // white → blue
     sunshine: { hMin: 50,  hMax: 50,  sMin: 5,  sMax: 90, lMin: 85, lMax: 50 }, // gray → yellow
     temp:     { hMin: 240, hMax: 0,   sMin: 60, sMax: 80, lMin: 70, lMax: 45 }, // blue → red
+    // Travel: green (close) → red (far)
+    ov:       { hMin: 120, hMax: 0,   sMin: 50, sMax: 80, lMin: 85, lMax: 35 },
+    car:      { hMin: 120, hMax: 0,   sMin: 50, sMax: 80, lMin: 85, lMax: 35 },
+    ovZh:     { hMin: 120, hMax: 0,   sMin: 50, sMax: 80, lMin: 85, lMax: 35 },
+    carZh:    { hMin: 120, hMax: 0,   sMin: 50, sMax: 80, lMin: 85, lMax: 35 },
   };
+
+  const fmtMin = (v) => Math.round(v) + " min";
 
   const LEGEND_CONFIG = {
     total:    { label: "Total Tax",     fmt: (v) => TaxUtils.fmtCHF(v) },
@@ -40,9 +48,13 @@ const TaxMap = (() => {
     precip:   { label: "Precipitation", fmt: (v) => Math.round(v).toLocaleString("de-CH") + " mm/yr" },
     sunshine: { label: "Sunshine",      fmt: (v) => Math.round(v).toLocaleString("de-CH") + " h/yr" },
     temp:     { label: "Temperature",   fmt: (v) => v.toFixed(1) + " °C" },
+    ov:       { label: "ÖV to nearest centre",  fmt: fmtMin },
+    car:      { label: "Car to nearest centre",  fmt: fmtMin },
+    ovZh:     { label: "ÖV to Zürich HB",       fmt: fmtMin },
+    carZh:    { label: "Car to Zürich",          fmt: fmtMin },
   };
 
-  const CLIMATE_MODES = new Set(["precip", "sunshine", "temp"]);
+  const OVERLAY_MODES = new Set(["precip", "sunshine", "temp", "ov", "car", "ovZh", "carZh"]);
 
   function lerp(a, b, t) {
     return Math.round(a + (b - a) * t);
@@ -60,7 +72,11 @@ const TaxMap = (() => {
   }
 
   function getMetric(bfs) {
-    if (CLIMATE_MODES.has(colorMode)) {
+    if (["ov", "car", "ovZh", "carZh"].includes(colorMode)) {
+      const t = travelData[bfs];
+      return t ? t[colorMode] : null;
+    }
+    if (OVERLAY_MODES.has(colorMode)) {
       const c = climateData[bfs];
       return c ? c[colorMode] : null;
     }
@@ -71,10 +87,11 @@ const TaxMap = (() => {
     return r.TotalTax;
   }
 
-  function init(topoData, muniDataIn, climateDataIn, onSelect) {
+  function init(topoData, muniDataIn, climateDataIn, travelDataIn, onSelect) {
     onSelectCallback = onSelect;
     muniData = muniDataIn;
     climateData = climateDataIn;
+    travelData = travelDataIn;
 
     map = L.map("map", {
       zoomSnap: 0.5,
@@ -140,13 +157,21 @@ const TaxMap = (() => {
     const canton = info ? TaxUtils.esc(info.canton) : "?";
     let html = `<span class="tt-name">${name}</span> ${canton}`;
 
-    // Always show climate if available
-    const c = climateData[bfs];
-    if (c) {
-      html += `<br><span class="tt-climate">${c.sunshine || "-"} h sun · ${c.precip || "-"} mm rain · ${c.temp || "-"}°C</span>`;
+    // Travel time
+    const tr = travelData[bfs];
+    if (tr) {
+      const zhPart = tr.ovZh != null ? `${tr.ovZh} min ÖV / ${tr.carZh} min car to ZH` : "";
+      const nearPart = `${tr.ov} min ÖV / ${tr.car} min car to ${tr.centre}`;
+      html += `<br><span class="tt-travel">${zhPart || nearPart}</span>`;
     }
 
-    // Show tax if calculated
+    // Climate
+    const c = climateData[bfs];
+    if (c) {
+      html += `<br><span class="tt-climate">${c.sunshine || "-"}h sun · ${c.precip || "-"}mm rain · ${c.temp || "-"}°C</span>`;
+    }
+
+    // Tax
     const r = results[bfs];
     if (r && r.TotalTax != null) {
       const inc = TaxUtils.sumIncomeTax(r);
@@ -183,7 +208,7 @@ const TaxMap = (() => {
   function updateSingle(bfs, result) {
     results[bfs] = result;
     // Only schedule repaint if we're in a tax mode
-    if (!CLIMATE_MODES.has(colorMode)) {
+    if (!OVERLAY_MODES.has(colorMode)) {
       const m = getMetric(bfs);
       if (m != null) {
         if (m < dataMin) dataMin = m;

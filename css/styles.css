@@ -616,6 +616,11 @@ button {
   font-size: 12px;
 }
 
+.leaflet-tooltip.tax-tooltip .tt-travel {
+  color: #a8d5a2;
+  font-size: 12px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .layout {

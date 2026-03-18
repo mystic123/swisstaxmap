@@ -8,15 +8,18 @@
 
   // --- Load data ---
   let climateData = {};
+  let travelData = {};
   try {
-    const [topoResp, muniResp, climateResp] = await Promise.all([
+    const [topoResp, muniResp, climateResp, travelResp] = await Promise.all([
       fetch("data/ch-municipalities.topojson"),
       fetch("data/municipalities.json"),
       fetch("data/climate.json"),
+      fetch("data/travel.json"),
     ]);
     topoData = await topoResp.json();
     muniData = await muniResp.json();
     climateData = await climateResp.json();
+    travelData = await travelResp.json();
   } catch (err) {
     const errDiv = document.createElement("div");
     errDiv.style.cssText = "padding:40px;color:#d63031";
@@ -26,7 +29,7 @@
   }
 
   // --- Init components ---
-  TaxMap.init(topoData, muniData, climateData, onMunicipalitySelect);
+  TaxMap.init(topoData, muniData, climateData, travelData, onMunicipalitySelect);
   UI.init(muniData);
   UI.populateCantonFilter(muniData);
   populateCalcCantonFilter(muniData);
