@@ -8,7 +8,8 @@ const TaxAPI = (() => {
     "https://swisstaxcalculator.estv.admin.ch/delegate/ost-integration/v1/lg-proxy/operation/c3b67379_ESTV/";
   const PROXY_BASE = "/api/";
 
-  let useProxy = true;
+  // Disable proxy on static hosts (GitHub Pages, file://, etc.)
+  let useProxy = location.hostname === "localhost" || location.hostname === "127.0.0.1";
 
   async function post(endpoint, payload) {
     if (useProxy) {
