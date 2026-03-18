@@ -96,17 +96,12 @@ header .subtitle {
   color: #555;
 }
 
-.radio-label {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  cursor: pointer;
-  color: #555;
-}
-
-.radio-label input[type="radio"] {
-  accent-color: #1a73e8;
-  margin: 0;
+#color-mode-select {
+  padding: 3px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
 }
 
 .legend-label {
@@ -261,33 +256,10 @@ header .subtitle {
   vertical-align: middle;
   margin-left: 3px;
   flex-shrink: 0;
-  position: relative;
 }
 
 .info-icon:hover {
   background: #1a73e8;
-}
-
-/* Custom tooltip via CSS since title= is ugly */
-.info-icon:hover::after {
-  content: attr(data-tip);
-  position: fixed;
-  z-index: 2000;
-  background: rgba(30, 30, 50, 0.95);
-  color: #fff;
-  padding: 10px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 400;
-  line-height: 1.45;
-  width: 280px;
-  max-width: 40vw;
-  white-space: normal;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  pointer-events: none;
-  left: 310px;
-  top: auto;
 }
 
 /* Checkbox dropdown */
@@ -637,6 +609,11 @@ button {
 
 .leaflet-tooltip.tax-tooltip .tt-tax {
   color: #f0c929;
+}
+
+.leaflet-tooltip.tax-tooltip .tt-climate {
+  color: #8ecae6;
+  font-size: 12px;
 }
 
 /* Responsive */

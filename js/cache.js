@@ -106,17 +106,17 @@ const Cache = (() => {
     };
   }
 
-  /** Clear all tax-related localStorage entries */
-  function clearAll() {
+  /** Clear only API result entries — keeps form state, budget values, toggle */
+  function clearResults() {
     const toRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith(RESULT_PREFIX) || k.startsWith("tax_"))) {
+      if (k && k.startsWith(RESULT_PREFIX)) {
         toRemove.push(k);
       }
     }
     toRemove.forEach((k) => localStorage.removeItem(k));
   }
 
-  return { formHash, getCached, setCached, saveFormState, loadFormState, expandResult, clearAll };
+  return { formHash, getCached, setCached, saveFormState, loadFormState, expandResult, clearResults };
 })();

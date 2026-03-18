@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Swiss Tax Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/tippy.js@6.3.7/dist/tippy.css" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -141,9 +142,18 @@
       <div id="map"></div>
       <div id="map-controls">
         <label>Color by:</label>
-        <label class="radio-label"><input type="radio" name="color-mode" value="total" checked> Total</label>
-        <label class="radio-label"><input type="radio" name="color-mode" value="income"> Income</label>
-        <label class="radio-label"><input type="radio" name="color-mode" value="wealth"> Wealth</label>
+        <select id="color-mode-select">
+          <optgroup label="Tax">
+            <option value="total" selected>Total Tax</option>
+            <option value="income">Income Tax</option>
+            <option value="wealth">Wealth Tax</option>
+          </optgroup>
+          <optgroup label="Climate (1991-2020)">
+            <option value="sunshine">Sunshine (h/yr)</option>
+            <option value="precip">Precipitation (mm/yr)</option>
+            <option value="temp">Temperature (&deg;C)</option>
+          </optgroup>
+        </select>
       </div>
       <div id="legend"></div>
       <div id="ranking-container">
@@ -178,6 +188,8 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+  <script src="https://unpkg.com/tippy.js@6.3.7/dist/tippy-bundle.umd.min.js"></script>
   <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
   <script src="js/tax-utils.js"></script>
   <script src="js/api.js"></script>

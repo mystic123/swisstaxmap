@@ -7,6 +7,7 @@ COPY css/ css/
 COPY js/ js/
 COPY data/ch-municipalities.topojson data/
 COPY data/municipalities.json data/
+COPY data/climate.json data/
 
 RUN adduser --disabled-password --no-create-home appuser && \
     chown -R appuser:appuser /app/data

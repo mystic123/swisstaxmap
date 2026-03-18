@@ -1,6 +1,6 @@
 /**
  * Leaflet map: municipality boundaries, canton borders, lakes.
- * Colors municipalities by tax burden (total, income, or wealth).
+ * Colors municipalities by tax burden or climate data.
  */
 const TaxMap = (() => {
   let map;
@@ -9,10 +9,11 @@ const TaxMap = (() => {
   let lakesLayer;
   let municipalities = {};
   let muniData = {};
+  let climateData = {};
   let results = {};
   let selectedBfs = null;
-  let taxMin = Infinity;
-  let taxMax = -Infinity;
+  let dataMin = Infinity;
+  let dataMax = -Infinity;
   let colorMode = "total";
   let onSelectCallback = null;
 
@@ -20,30 +21,60 @@ const TaxMap = (() => {
   let pendingUpdates = new Set();
   let rafScheduled = false;
 
+  // Color schemes per mode
+  const COLOR_SCHEMES = {
+    // Tax: green (low) → red (high)
+    total:    { hMin: 120, hMax: 0,   sMin: 50, sMax: 80, lMin: 85, lMax: 35 },
+    income:   { hMin: 120, hMax: 0,   sMin: 50, sMax: 80, lMin: 85, lMax: 35 },
+    wealth:   { hMin: 120, hMax: 0,   sMin: 50, sMax: 80, lMin: 85, lMax: 35 },
+    // Climate
+    precip:   { hMin: 210, hMax: 210, sMin: 10, sMax: 80, lMin: 97, lMax: 40 }, // white → blue
+    sunshine: { hMin: 50,  hMax: 50,  sMin: 5,  sMax: 90, lMin: 85, lMax: 50 }, // gray → yellow
+    temp:     { hMin: 240, hMax: 0,   sMin: 60, sMax: 80, lMin: 70, lMax: 45 }, // blue → red
+  };
+
+  const LEGEND_CONFIG = {
+    total:    { label: "Total Tax",     fmt: (v) => TaxUtils.fmtCHF(v) },
+    income:   { label: "Income Tax",    fmt: (v) => TaxUtils.fmtCHF(v) },
+    wealth:   { label: "Wealth Tax",    fmt: (v) => TaxUtils.fmtCHF(v) },
+    precip:   { label: "Precipitation", fmt: (v) => Math.round(v).toLocaleString("de-CH") + " mm/yr" },
+    sunshine: { label: "Sunshine",      fmt: (v) => Math.round(v).toLocaleString("de-CH") + " h/yr" },
+    temp:     { label: "Temperature",   fmt: (v) => v.toFixed(1) + " °C" },
+  };
+
+  const CLIMATE_MODES = new Set(["precip", "sunshine", "temp"]);
+
   function lerp(a, b, t) {
     return Math.round(a + (b - a) * t);
   }
 
   function getColor(value) {
     if (value == null) return "#d0d0d0";
-    const t = taxMax > taxMin ? (value - taxMin) / (taxMax - taxMin) : 0.5;
+    const t = dataMax > dataMin ? (value - dataMin) / (dataMax - dataMin) : 0.5;
     const clamped = Math.max(0, Math.min(1, t));
-    const h = lerp(120, 0, clamped);
-    const s = lerp(50, 80, clamped);
-    const l = lerp(85, 35, clamped);
+    const scheme = COLOR_SCHEMES[colorMode] || COLOR_SCHEMES.total;
+    const h = lerp(scheme.hMin, scheme.hMax, clamped);
+    const s = lerp(scheme.sMin, scheme.sMax, clamped);
+    const l = lerp(scheme.lMin, scheme.lMax, clamped);
     return `hsl(${h},${s}%,${l}%)`;
   }
 
-  function getMetric(r) {
+  function getMetric(bfs) {
+    if (CLIMATE_MODES.has(colorMode)) {
+      const c = climateData[bfs];
+      return c ? c[colorMode] : null;
+    }
+    const r = results[bfs];
     if (!r) return null;
     if (colorMode === "income") return TaxUtils.sumIncomeTax(r);
     if (colorMode === "wealth") return TaxUtils.sumWealthTax(r);
     return r.TotalTax;
   }
 
-  function init(topoData, muniDataIn, onSelect) {
+  function init(topoData, muniDataIn, climateDataIn, onSelect) {
     onSelectCallback = onSelect;
     muniData = muniDataIn;
+    climateData = climateDataIn;
 
     map = L.map("map", {
       zoomSnap: 0.5,
@@ -66,21 +97,7 @@ const TaxMap = (() => {
         municipalities[bfs] = layer;
 
         layer.on("mouseover", function (e) {
-          const info = muniData[bfs];
-          const name = info ? TaxUtils.esc(info.name) : `BFS ${bfs}`;
-          const canton = info ? TaxUtils.esc(info.canton) : "?";
-          const r = results[bfs];
-          let html = `<span class="tt-name">${name}</span> ${canton}`;
-          if (r && r.TotalTax != null) {
-            const inc = TaxUtils.sumIncomeTax(r);
-            const wlt = TaxUtils.sumWealthTax(r);
-            html += `<br><span class="tt-tax">Total: ${TaxUtils.fmtCHF(r.TotalTax)}</span>`;
-            html += `<br>Income: ${TaxUtils.fmtCHF(inc)} · Wealth: ${TaxUtils.fmtCHF(wlt)}`;
-            html += `<br>Marginal: ${(r.MarginalTaxRate || 0).toFixed(1)}%`;
-            if (r.MarginalTaxRateVM) html += ` · Wealth: ${r.MarginalTaxRateVM.toFixed(2)}%`;
-          } else {
-            html += `<br><span class="tt-tax">not calculated</span>`;
-          }
+          const html = buildTooltip(bfs);
           this.bindTooltip(html, { className: "tax-tooltip", sticky: true }).openTooltip(e.latlng);
           this.setStyle({ weight: 2, color: "#333" });
           this.bringToFront();
@@ -117,11 +134,35 @@ const TaxMap = (() => {
     map.fitBounds(municipalityLayer.getBounds(), { padding: [10, 10] });
   }
 
+  function buildTooltip(bfs) {
+    const info = muniData[bfs];
+    const name = info ? TaxUtils.esc(info.name) : `BFS ${bfs}`;
+    const canton = info ? TaxUtils.esc(info.canton) : "?";
+    let html = `<span class="tt-name">${name}</span> ${canton}`;
+
+    // Always show climate if available
+    const c = climateData[bfs];
+    if (c) {
+      html += `<br><span class="tt-climate">${c.sunshine || "-"} h sun · ${c.precip || "-"} mm rain · ${c.temp || "-"}°C</span>`;
+    }
+
+    // Show tax if calculated
+    const r = results[bfs];
+    if (r && r.TotalTax != null) {
+      const inc = TaxUtils.sumIncomeTax(r);
+      const wlt = TaxUtils.sumWealthTax(r);
+      html += `<br><span class="tt-tax">Tax: ${TaxUtils.fmtCHF(r.TotalTax)}</span>`;
+      html += `<br>Income: ${TaxUtils.fmtCHF(inc)} · Wealth: ${TaxUtils.fmtCHF(wlt)}`;
+    }
+
+    return html;
+  }
+
   function resetStyle(bfs) {
     const layer = municipalities[bfs];
     if (!layer) return;
     const isSelected = bfs === selectedBfs;
-    const metric = getMetric(results[bfs]);
+    const metric = getMetric(bfs);
     layer.setStyle({
       weight: isSelected ? 2.5 : 0.3,
       color: isSelected ? "#1a1a2e" : "#999",
@@ -139,26 +180,26 @@ const TaxMap = (() => {
     if (onSelectCallback) onSelectCallback(bfs, results[bfs]);
   }
 
-  /** Incrementally update — batches via rAF to avoid jank */
   function updateSingle(bfs, result) {
     results[bfs] = result;
-    const m = getMetric(result);
-    if (m != null) {
-      if (m < taxMin) taxMin = m;
-      if (m > taxMax) taxMax = m;
-    }
-    pendingUpdates.add(bfs);
-    if (!rafScheduled) {
-      rafScheduled = true;
-      requestAnimationFrame(flushPendingUpdates);
+    // Only schedule repaint if we're in a tax mode
+    if (!CLIMATE_MODES.has(colorMode)) {
+      const m = getMetric(bfs);
+      if (m != null) {
+        if (m < dataMin) dataMin = m;
+        if (m > dataMax) dataMax = m;
+      }
+      pendingUpdates.add(bfs);
+      if (!rafScheduled) {
+        rafScheduled = true;
+        requestAnimationFrame(flushPendingUpdates);
+      }
     }
   }
 
   function flushPendingUpdates() {
     rafScheduled = false;
-    for (const bfs of pendingUpdates) {
-      resetStyle(bfs);
-    }
+    for (const bfs of pendingUpdates) resetStyle(bfs);
     pendingUpdates.clear();
   }
 
@@ -169,13 +210,13 @@ const TaxMap = (() => {
   }
 
   function recomputeMinMax() {
-    taxMin = Infinity;
-    taxMax = -Infinity;
-    for (const bfs in results) {
-      const m = getMetric(results[bfs]);
+    dataMin = Infinity;
+    dataMax = -Infinity;
+    for (const bfs in municipalities) {
+      const m = getMetric(bfs);
       if (m != null) {
-        taxMin = Math.min(taxMin, m);
-        taxMax = Math.max(taxMax, m);
+        dataMin = Math.min(dataMin, m);
+        dataMax = Math.max(dataMax, m);
       }
     }
   }
@@ -187,26 +228,23 @@ const TaxMap = (() => {
 
   function updateLegend() {
     const legend = document.getElementById("legend");
-    if (taxMin === Infinity) {
+    if (dataMin === Infinity) {
       legend.classList.remove("visible");
       return;
     }
     legend.classList.add("visible");
 
-    const labels = { total: "Total Tax", income: "Income Tax", wealth: "Wealth Tax" };
-    const minFmt = TaxUtils.fmtCHF(taxMin);
-    const maxFmt = TaxUtils.fmtCHF(taxMax);
-
+    const cfg = LEGEND_CONFIG[colorMode] || LEGEND_CONFIG.total;
     const stops = [];
     for (let i = 0; i <= 10; i++) {
-      stops.push(getColor(taxMin + (i / 10) * (taxMax - taxMin)));
+      stops.push(getColor(dataMin + (i / 10) * (dataMax - dataMin)));
     }
 
     legend.innerHTML = `
-      <span>${minFmt}</span>
+      <span>${cfg.fmt(dataMin)}</span>
       <div class="gradient-bar" style="background: linear-gradient(to right, ${stops.join(", ")})"></div>
-      <span>${maxFmt}</span>
-      <span class="legend-label">${labels[colorMode]}</span>
+      <span>${cfg.fmt(dataMax)}</span>
+      <span class="legend-label">${cfg.label}</span>
     `;
   }
 

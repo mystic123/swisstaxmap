@@ -7,13 +7,16 @@
   let currentResults = {};
 
   // --- Load data ---
+  let climateData = {};
   try {
-    const [topoResp, muniResp] = await Promise.all([
+    const [topoResp, muniResp, climateResp] = await Promise.all([
       fetch("data/ch-municipalities.topojson"),
       fetch("data/municipalities.json"),
+      fetch("data/climate.json"),
     ]);
     topoData = await topoResp.json();
     muniData = await muniResp.json();
+    climateData = await climateResp.json();
   } catch (err) {
     const errDiv = document.createElement("div");
     errDiv.style.cssText = "padding:40px;color:#d63031";
@@ -23,7 +26,7 @@
   }
 
   // --- Init components ---
-  TaxMap.init(topoData, muniData, onMunicipalitySelect);
+  TaxMap.init(topoData, muniData, climateData, onMunicipalitySelect);
   UI.init(muniData);
   UI.populateCantonFilter(muniData);
   populateCalcCantonFilter(muniData);
@@ -61,19 +64,19 @@
     Calculator.cancel();
   });
 
-  // --- Cache reset ---
+  // --- Cache reset (clears all API-derived data, keeps form inputs) ---
   document.getElementById("reset-cache-btn").addEventListener("click", async () => {
-    if (!confirm("Clear all cached results (browser + server)?")) return;
-    Cache.clearAll();
+    if (!confirm("Clear all cached API results (server + browser)?")) return;
+    // Clear browser localStorage result cache (but keep form state + budget values + toggle)
+    Cache.clearResults();
+    // Clear server SQLite cache
     try { await fetch("/api/clear-cache", { method: "POST" }); } catch {}
-    location.reload();
+    alert("Cache cleared. Next calculation will re-fetch from ESTV API.");
   });
 
   // --- Map color mode ---
-  document.querySelectorAll('input[name="color-mode"]').forEach((radio) => {
-    radio.addEventListener("change", (e) => {
-      TaxMap.setColorMode(e.target.value);
-    });
+  document.getElementById("color-mode-select").addEventListener("change", (e) => {
+    TaxMap.setColorMode(e.target.value);
   });
 
   // --- Detailed calculation toggle ---
@@ -317,7 +320,17 @@
 
           const label = document.createElement("label");
           if (tooltip) {
-            label.innerHTML = `${TaxUtils.esc(labelText)} <span class="info-icon" data-tip="${tooltip.replace(/"/g, '&quot;')}">i</span>`;
+            const span = document.createElement("span");
+            span.className = "info-icon";
+            span.textContent = "i";
+            label.append(document.createTextNode(labelText + " "), span);
+            tippy(span, {
+              content: tooltip,
+              placement: "right",
+              maxWidth: 280,
+              interactive: false,
+              appendTo: document.body,
+            });
           } else {
             label.textContent = labelText;
           }
