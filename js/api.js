@@ -19,9 +19,10 @@ const TaxAPI = (() => {
           body: JSON.stringify(payload),
         });
         if (resp.ok) return resp.json();
+        // Proxy returned error (e.g. 404 on static host) — disable permanently
+        useProxy = false;
       } catch {
         useProxy = false;
-        console.warn("Proxy not available, using ESTV API directly");
       }
     }
 
